@@ -110,4 +110,4 @@ For convenient, we provided the genereated train data used in our paper. you can
 ## Results
 *All metrics is under top-20*
 
-![results](https://s1.ax1x.com/2022/06/10/X6BxyT.png)
+![results](https://s1.ax1x.com/2022/07/16/j4T6aQ.png)
