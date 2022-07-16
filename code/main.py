@@ -29,7 +29,7 @@ if world.LOAD:
         # pretrain_file_path = './emebdding/mf-Clothing-64.pth.tar'
         pretrain_dict = torch.load(pretrain_file_path, map_location=torch.device('cpu'))
         original_model_dict = Recmodel.state_dict()
-        # 截取两个模型名称相同的层
+        # load the embeedings with same scope
         pretrained_dict = {k: v for k, v in pretrain_dict.items() if k in original_model_dict}
         original_model_dict.update(pretrained_dict)
         Recmodel.load_state_dict(original_model_dict)

@@ -36,7 +36,7 @@ class PairWiseModel(BasicModel):
             users: users list 
             pos: positive items for corresponding users
             neg: negative items for corresponding users
-            unique_user: 本次训练中唯一的用户列表
+            unique_user: unique user list
             pos_item_index: positive items for corresponding users
             pos_item_mask: positive items mask for corresponding users
         Return:
@@ -55,7 +55,7 @@ class PureMF(BasicModel):
         self.user_privacy_ration = dataset.userPrivacySetting
         self.latent_dim = config['latent_dim_rec']
         self.replace_ratio = config['replace_ratio']
-        # 初始化模型信息
+        # init modules
         self.regularSimilar = RegularSimilar(self.latent_dim, dataset.userSimMax, dataset.userSimMin)
         self.select_layer = nn.Sequential(
             nn.Linear(2 * self.latent_dim, self.latent_dim),
@@ -85,14 +85,14 @@ class PureMF(BasicModel):
         scores = torch.matmul(users_emb, items_emb.t())
         return self.f(scores)
 
-        # 根据的采样率获取分数较低的节点
+        # select node to replace according the item score
     def sample_low_score_pos_item(self, users, sorted_item_score, pos_item_index, all_users, all_items, train_pos):
         users = users.detach().cpu().numpy()
         sorted_pos_score = sorted_item_score[0].detach().cpu().numpy()
         sorted_pos_index = sorted_item_score[1].detach().cpu().numpy()
         pos_item_index = pos_item_index.long().detach().cpu().numpy()
         train_pos = train_pos.long().detach().cpu().numpy()
-        # 循环获取每个用户下被选中的item数据
+        # select the item that less contribute to user preference
         need_replace = utils.construct_need_replace_user_item(
             users, sorted_pos_score, sorted_pos_index,
             pos_item_index, self.replace_ratio,
@@ -101,32 +101,32 @@ class PureMF(BasicModel):
         need_replace = np.array(need_replace)
 
         if need_replace.shape[0] == 0:
-            # item个数太少 不进行替换
             return need_replace, torch.tensor([]).cuda(), torch.tensor([]).cuda(), 0., 0.
 
 
-        # 获取所有的用户和item id的集合
+        # get user and item list
         users_index = need_replace[:, 0]
         items_index = need_replace[:, 1]
         all_items = all_items.detach()
-        # 获取对应的特征
+        # get user and item embeddings
         users_emb = all_users[users_index].detach()
         items_emb = all_items[items_index]
+        # get user privacy setting
         privacy_settings = self.user_privacy_ration[users_index]
         need_replace_feature = torch.cat([users_emb, items_emb], dim=1)
-        # 删除冗余数据
+        # free needless paras
         del pos_item_index
         del users_emb
         del items_emb
         del all_users
 
-        # 获取每个需要替换的item 对应的相似item
+        # replace item that less contribute to user preference via generator
         replaceable_items, replaceable_items_feature, similarity_loss, similarity = \
             self.regularSimilar.choose_replaceable_item(need_replace, need_replace_feature, all_items, privacy_settings)
 
         return need_replace, replaceable_items, replaceable_items_feature, similarity_loss, similarity
 
-    # 计算每个正样本和用户的得分
+    # get the score of user with positive items.
     def computer_pos_score(self, users, pos_item_index, pos_item_mask, train_pos):
         # start_time = time()
         all_users = self.embedding_user.weight
@@ -136,54 +136,49 @@ class PureMF(BasicModel):
         pos_item_mask = torch.from_numpy(pos_item_mask).cuda()
         max_len = pos_item_index.size(1)
         batch_size = pos_item_index.size(0)
-        # 获取用户的所有pos item的特征信息
-        # batch_size  * max_len * dim
+        # get the mebedding of positive items and reshape them.
         pos_emb = all_items[pos_item_index.long()].detach()
-        # 获取所有用的特信息
         users_emb = all_users[users].detach()
         users_expand_emb = users_emb.view(batch_size, 1, self.latent_dim)
         users_expand_emb = users_expand_emb.expand(batch_size, max_len, self.latent_dim)
         user_pos_item_feature = torch.cat([users_expand_emb, pos_emb], dim=-1)
         # user_pos_item_feature = user_pos_item_feature.reshape(-1, 2 * self.latent_dim)
-        # 计算用户和item之间的attention vector
+        # get the attention vector between the positive items and user.
         user_item_scores = self.select_layer(user_pos_item_feature)
         del user_pos_item_feature
         user_item_scores = user_item_scores.reshape(batch_size, max_len)
-        # 给mask的数据设置一个较小的得分， 使得补充的数据在attention中尽量接近于0
+        # fill the valid items using a smaller score.
         user_item_scores = user_item_scores.masked_fill(mask=(pos_item_mask == 0), value=-1e9)
-        # 通过softmax针对每个用户下的item进行归一化操作
         attention_vector = F.softmax(user_item_scores, dim=-1)
 
-        # 针对获取到的attention进行排序
+        # sort the item scores
         sorted_pos_cores = torch.sort(attention_vector, dim=1, descending=True)
 
-        # 根据概率挑选item去替换
+        # select the item that less contribute to user preference
         need_replace, replaceable_items, replaceable_items_feature, similarity_loss, similarity = \
             self.sample_low_score_pos_item(users, sorted_pos_cores, pos_item_index, all_users, all_items, train_pos)
 
-        # 根据attention vector 针对每个用户下的item进行加和
+        # compute the feature loss between the united item embeeding and user embeeding
         pos_emb = pos_emb * attention_vector.reshape(batch_size, max_len, 1)
         user_items_feature = pos_emb.sum(dim=1)
-
         user_items_transform_feature = self.feature_transform(user_items_feature)
-        # 计算两个特征的loss
         feature_loss = self.feature_loss(user_items_transform_feature, users_emb)
+
+
         del users_emb
         del user_items_feature
         del user_items_transform_feature
 
         return need_replace, replaceable_items, replaceable_items_feature, similarity_loss, similarity, feature_loss
 
+    # replace the need item with selected items
     def replace_pos_items(self, users, pos, neg, need_replace, replaceable_items):
         numpy_users = users.detach().cpu().numpy()
         numpy_pos = pos.detach().cpu().numpy()
-        # 生成一个需要被替换的item的mask
-        # 生成一个可以用于替换的item列表
+
         pos_mask, replaceable_mask = \
             utils.replace_original_to_replaceable(numpy_users, numpy_pos, need_replace)
 
-        # 开始分别替换user和neg对应的数据
-        # 取出来不需要替换的item
         users = users[pos_mask == 1]
         neg = neg[pos_mask == 1]
 
@@ -204,17 +199,15 @@ class PureMF(BasicModel):
 
 
     def bpr_loss(self, users, pos, neg, unique_user=None, pos_item_index=None, pos_item_mask=None):
-        # 计算训练用户的正向样本的得分
-        # 得分最低的样本需要被替换
-        # 在所有的节点里面挑选相似度在阈值范围的节点
         # start_time = time()
         CF1_loss, CF1_reg_loss = self.get_original_bpr_loss(users, pos, neg)
+        # get the need item list and replace item list
         need_replace, replaceable_items, replaceable_items_feature, similarity_loss, similarity, std_loss = \
             self.computer_pos_score(unique_user, pos_item_index, pos_item_mask, pos)
-        # 替换所有要替换的节点
+        # replace items
         users, neg, replaceable_mask \
             = self.replace_pos_items(users, pos, neg, need_replace, replaceable_items)
-        # 计算新替换的item的bpr loss
+        # recompute the bpr loss of the replaced items.
         users_emb = self.embedding_user(users.long()).detach()
         pos_emb = replaceable_items_feature[replaceable_mask]
         neg_emb = self.embedding_item(neg.long()).detach()

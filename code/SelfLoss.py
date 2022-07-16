@@ -12,7 +12,3 @@ class SimilarityMarginLoss(nn.Module):
         # loss = torch.clamp(torch.abs(predict - label) - 0.1, min=0).mean()
         # print(predict.mean(), label.mean(), loss.mean())
         return loss
-
-
-        # abs(0.7 - 0.9) = - 0.2 - 0.1 = 0.1
-        # abs(0.89 - 0.9) = 0.01 - 0.1 =

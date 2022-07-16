@@ -7,10 +7,10 @@ from pprint import pprint
 
 
 if world.config['privacy_settings_json'] is not None:
-    # 指定了特定的json文件
+    # specify the json file of privacy settings
     world.config['privacy_ratio'] = 'externalJsonFile'
 elif world.config['privacy_ratio'] is not None:
-    # 设置了有效的敏感度
+    # set the valid privacy settings
     jsonPath = utils.generate_user_privacy_settings(world.dataset, world.config['privacy_ratio'])
     world.config['privacy_settings_json'] = jsonPath
 else:

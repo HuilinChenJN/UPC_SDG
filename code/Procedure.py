@@ -30,7 +30,6 @@ def BPR_train_original(dataset, recommend_model, loss_class, epoch, neg_k=1, w=N
     bpr: utils.BPRLoss = loss_class
     
     with timer(name="Sample"):
-        # 采样副样本
         S = utils.UniformSample_original(dataset)
     users = torch.Tensor(S[:, 0]).long()
     posItems = torch.Tensor(S[:, 1]).long()
@@ -55,12 +54,10 @@ def BPR_train_original(dataset, recommend_model, loss_class, epoch, neg_k=1, w=N
 
         if len(batch_users) < world.config['bpr_batch_size']:
             continue
-        # 增加每个用户的正样本
         unique_user, pos_item_index, mask = load_users_pos_items(dataset, batch_users)
         # start_time = time()
         cri, bpr_loss, std_loss, similarity_loss, similarity = bpr.stageOne(batch_users, batch_pos, batch_neg, unique_user, pos_item_index, mask)
         # end_time = time()
-        # print('计算时间', end_time - start_time)
 
         aver_loss += cri
         total_similarity += similarity
@@ -198,16 +195,16 @@ def Test(dataset, Recmodel, epoch, w=None, multicore=0):
 
 
 def output_generative_data(dataset, recommend_model, weight_file):
-    # 加载最优的模型数据
+    # load the best model weight
     recommend_model.load_state_dict(torch.load(weight_file, map_location=torch.device('cpu')))
     recommend_model.eval()
     print(f"loaded model best weights from {weight_file}")
-    # 数据集中所有用户的item列表
+    # all item list
     all_pos_list = np.array(dataset.allPos, dtype=object)
-    # 生成数据集
+    # init dataset data
     users = np.arange(0, dataset.n_users)
     world.is_train = False
-    # 循环获取每个用户要替换的数据和被替换的数据信息
+    # output log string
     output_file_name = './output/{}-replace{}-privacy{}.txt'\
         .format(world.dataset, world.config['replace_ratio'], world.config['privacy_ratio'])
     total_similarity = 0.
