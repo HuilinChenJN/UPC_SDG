@@ -10,6 +10,8 @@ Fan Liu, Zhiyong Cheng, Huilin Chen, Yinwei Wei, Liqiang Nie, and Mohan Kankanha
 
 Please cite our SIGIR'22 paper if you use our codes. Thanks!
 ## Updates
+Update (November 17, 2022)
+This update shares our training dataset with public researchers. Please check the Dataset section.
 Update (June 11, 2022)
 This update will integrate the function of manually generating user privacy settings（`process_data.py`） into the model. Now you can specify the user's privacy sensitivity by setting the parameter `--privacy_ratio` or `--privacy_settings_json`
 
@@ -32,8 +34,7 @@ and [SNAP](https://snap.stanford.edu/data/loc-gowalla.html) Page, details settin
 
 ## Dataset
 
-We provide three processed datasets: Office, Clothing and Gowalla.
-
+We provide three processed datasets: Office, Clothing and Gowalla. Besides, we also share our training dataset [Google Ddrive]([https://drive.google.com/drive/folders/14bI4GXyK2VZIROn3BGSHljrFWdqud3WU?usp=sharing](https://drive.google.com/drive/folders/1FuiaWIVQhbsMwIUErmmDzfSh_ib1iH73?usp=sharing)) with public researchers.
 
 |#Interactions|#Users|#Items|#interactions|sparsity|
 |:-|:-|:-|:-|:-|
